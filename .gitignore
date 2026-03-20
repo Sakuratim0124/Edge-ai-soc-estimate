@@ -1,0 +1,16 @@
+# 編育產生的資料夾
+Build/
+bin/
+obj/
+
+# 編譯產生的檔案
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+
+# IDE 相關的私有設定 (VS Code / STM32CubeIDE)
+.vscode/ipch/
+.vscode/msvc.cache/
+*.mxproject
