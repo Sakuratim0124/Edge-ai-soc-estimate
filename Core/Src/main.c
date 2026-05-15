@@ -23,13 +23,17 @@
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/_intsup.h>
 #include "epd_driver.h" 
+#include "stm32g474xx.h"
 #include "stm32g4xx_hal.h"
 #include "epd_images.h"
 #include "GUI.h"
 #include "font.h"
+#include "stm32g4xx_hal_adc.h"
+#include "stm32g4xx_hal_gpio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,6 +64,15 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 uint8_t epd_update_flag = 1;
+int adc_value = 0;
+float voltage = 0;
+float voltage1 = 0;
+int soc = 0;
+int soh = 0;
+char meassage[30] = "";
+float CAL_SLOPE_M  = 0.39f;
+float CAL_OFFSET_B = 2.21f; 
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,10 +83,13 @@ static void MX_ADC1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_SPI4_Init(void);
 static void MX_RTC_Init(void);
-static void Update_BMS_UI(float voltage, float soc, float soh);
-void  HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc);
-
 /* USER CODE BEGIN PFP */
+void Update_BMS_UI(float voltage, float soc, float soh);
+void low_efford(void);
+void mid_efford(void);
+void high_efford(void);
+void ex_high_efford(void);
+static void Update_AdcReading(void);
 
 /* USER CODE END PFP */
 
@@ -81,6 +97,8 @@ void  HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc);
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
+
+
 
 /**
   * @brief  The application entry point.
@@ -95,7 +113,7 @@ int main(void)
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */                                                                           
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -118,15 +136,26 @@ int main(void)
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 
-  int adc_value = 0;
-  float voltage = 0;
-  char meassage[30] = "";
-  uint16_t volt100 = 0;
-  uint16_t vol_int = 0;
-  uint16_t vol_dec = 0;
-
   HAL_ADCEx_Calibration_Start(&hadc1,ADC_SINGLE_ENDED);
-  Paint_NewImage(Canvas_BW, EPD_WIDTH, EPD_HEIGHT, ROTATE_270, WHITE);
+  HAL_ADC_Start(&hadc1);
+  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+  Paint_NewImage(Canvas_BW, EPD_WIDTH, EPD_HEIGHT, ROTATE_90, WHITE);
+
+  HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
+  if (HAL_GPIO_ReadPin(GPIOB, low_Pin) == GPIO_PIN_SET){
+    high_efford();
+  }
+  else if (HAL_GPIO_ReadPin(GPIOD, mid_Pin) == GPIO_PIN_SET){
+    mid_efford();
+  }
+  else if (HAL_GPIO_ReadPin(GPIOD, high_Pin) == GPIO_PIN_SET){
+    low_efford();
+  }
+  else if (HAL_GPIO_ReadPin(GPIOC, ex_Pin_Pin) == GPIO_PIN_SET){
+    ex_high_efford();
+  }
+  else {
+  }
 
   
 
@@ -136,44 +165,37 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);      // formula => Vout(x/4095)*3.21  
+    Update_AdcReading();
+    
     if (HAL_GPIO_ReadPin(GPIOB, ONOFF_Pin) == GPIO_PIN_SET){
+      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0);
       EPD_Init();
       EPD_Clear();
       EPD_Sleep();
       while(1);
     }
-
-    if (epd_update_flag == 1 ){
-
-          epd_update_flag = 0; 
-          Update_BMS_UI(voltage, 90.5, 99.0); 
-
-      }
-    for(int i = 1; i<5;i++){
-      int A = i*1024 -1 ;
-      printf("DAC Value:%d\n",A);
-      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, A);
-      HAL_ADC_Start(&hadc1);
-      HAL_ADC_PollForConversion(&hadc1,HAL_MAX_DELAY);
-      
-      adc_value = HAL_ADC_GetValue(&hadc1);
-      voltage = (adc_value/4095.0)*3.3;
-      volt100 = voltage * 100;
-      vol_int = (int)(volt100 / 100);
-      vol_dec = (int)(volt100 % 100);
-
-      sprintf(meassage, "ADC:%d Voltage:%d.%02d\r\n", adc_value, vol_int, vol_dec); 
-      HAL_UART_Transmit(&huart1, (uint8_t*)meassage, strlen(meassage), HAL_MAX_DELAY);
-      HAL_Delay(3000);
+    
+    HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);      // formula => Vout(x/4095)*3.21  
+    if (HAL_GPIO_ReadPin(GPIOB, low_Pin) == GPIO_PIN_SET){
+      high_efford();
+    }
+    else if (HAL_GPIO_ReadPin(GPIOD, mid_Pin) == GPIO_PIN_SET){
+      mid_efford();
+    }
+    else if (HAL_GPIO_ReadPin(GPIOD, high_Pin) == GPIO_PIN_SET){
+      low_efford();
+    }
+    else if (HAL_GPIO_ReadPin(GPIOC, ex_Pin_Pin) == GPIO_PIN_SET){
+      ex_high_efford();
+    }
+    else { 
     }
 
-
-
-
-    // HAL_RTC_GetTime(&hrtc, &sPaint_time.Hour, &sPaint_time.Min, &sPaint_time.Sec, RTC_FORMAT_BIN);
-    
-
+    if (epd_update_flag == 1 ){
+          epd_update_flag = 0; 
+          Update_BMS_UI(voltage, soc, soh); 
+      }
+ 
  
     
     /* USER CODE END WHILE */
@@ -337,7 +359,7 @@ static void MX_DAC1_Init(void)
   sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
   sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
   sConfig.DAC_Trigger2 = DAC_TRIGGER_NONE;
-  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_DISABLE;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_EXTERNAL;
   sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
   if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_2) != HAL_OK)
@@ -500,12 +522,23 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, RST_Pin|DC_Pin|CS_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : BUSY_Pin ONOFF_Pin */
-  GPIO_InitStruct.Pin = BUSY_Pin|ONOFF_Pin;
+  /*Configure GPIO pin : PA2 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BUSY_Pin low_Pin ONOFF_Pin */
+  GPIO_InitStruct.Pin = BUSY_Pin|low_Pin|ONOFF_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -516,6 +549,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : mid_Pin high_Pin */
+  GPIO_InitStruct.Pin = mid_Pin|high_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ex_Pin_Pin */
+  GPIO_InitStruct.Pin = ex_Pin_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(ex_Pin_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -570,6 +615,75 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
     if (hrtc->Instance == RTC) {
         epd_update_flag = 1; 
   }
+}
+
+static void Update_AdcReading(void)
+{
+
+  HAL_ADC_Start(&hadc1);
+  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+  adc_value = HAL_ADC_GetValue(&hadc1);
+  voltage1 = (adc_value / 4095.0f) * 3.22f * 2.0f ; 
+  voltage = ((voltage1 * CAL_SLOPE_M) + CAL_OFFSET_B)+0.05;
+}
+
+void  low_efford (void)
+{
+      int A = 1024 ;
+
+      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, A);
+      if (voltage > 1.5){
+        soc = 50;
+        soh = 50;
+      }
+      else{
+        soc = 80;
+        soh = 80;
+      }
+}
+void mid_efford(void)
+{
+      int B = 2047 ;
+
+      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, B);
+      if (voltage > 1.5){
+        soc = 50;
+        soh = 50;
+      }
+      else{
+        soc = 80;
+        soh = 80;
+      }
+}
+
+void high_efford(void)
+{
+      int C = 3071 ;
+      
+      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, C);
+      if (voltage > 1.5){
+        soc = 50;
+        soh = 50;
+      }
+      else{
+        soc = 80;
+        soh = 80;
+      }
+}
+
+void ex_high_efford(void)
+{
+      int D = 4095 ;
+      
+      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, D);
+      if (voltage > 1.5){
+        soc = 50;
+        soh = 50;
+      }
+      else{
+        soc = 80;
+        soh = 80;
+      }
 }
 
 

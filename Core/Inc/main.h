@@ -65,8 +65,16 @@ void Error_Handler(void);
 #define DC_GPIO_Port GPIOB
 #define CS_Pin GPIO_PIN_13
 #define CS_GPIO_Port GPIOB
+#define low_Pin GPIO_PIN_14
+#define low_GPIO_Port GPIOB
 #define ONOFF_Pin GPIO_PIN_15
 #define ONOFF_GPIO_Port GPIOB
+#define mid_Pin GPIO_PIN_8
+#define mid_GPIO_Port GPIOD
+#define high_Pin GPIO_PIN_9
+#define high_GPIO_Port GPIOD
+#define ex_Pin_Pin GPIO_PIN_8
+#define ex_Pin_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 
