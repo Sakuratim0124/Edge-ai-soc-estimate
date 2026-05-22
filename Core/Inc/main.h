@@ -73,6 +73,8 @@ void Error_Handler(void);
 #define mid_GPIO_Port GPIOD
 #define high_Pin GPIO_PIN_9
 #define high_GPIO_Port GPIOD
+#define ReadBatteryStatus_Pin GPIO_PIN_14
+#define ReadBatteryStatus_GPIO_Port GPIOD
 #define ex_Pin_Pin GPIO_PIN_8
 #define ex_Pin_GPIO_Port GPIOC
 

@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "app_x-cube-ai.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -69,10 +70,12 @@ float voltage = 0;
 float voltage1 = 0;
 int soc = 0;
 int soh = 0;
-char meassage[30] = "";
+char meassage[256] = "";  // 扩大缓冲区以容纳更长的输出
+char soc_str[20] = "";
 float CAL_SLOPE_M  = 0.39f;
 float CAL_OFFSET_B = 2.21f; 
-
+float Volt[20] = {0};
+float Curr[20] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,8 +101,6 @@ static void Update_AdcReading(void);
 
 /* USER CODE END 0 */
 
-
-
 /**
   * @brief  The application entry point.
   * @retval int
@@ -113,7 +114,7 @@ int main(void)
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */                                                                           
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -134,7 +135,12 @@ int main(void)
   MX_USART1_UART_Init();
   MX_SPI4_Init();
   MX_RTC_Init();
+  MX_X_CUBE_AI_Init();
   /* USER CODE BEGIN 2 */
+
+  /* 測試 UART 輸出 */
+  sprintf(meassage, "\r\n=== UART INITIALIZED ===\r\n");
+  HAL_UART_Transmit(&huart1, (uint8_t*)meassage, strlen(meassage), HAL_MAX_DELAY);
 
   HAL_ADCEx_Calibration_Start(&hadc1,ADC_SINGLE_ENDED);
   HAL_ADC_Start(&hadc1);
@@ -142,22 +148,37 @@ int main(void)
   Paint_NewImage(Canvas_BW, EPD_WIDTH, EPD_HEIGHT, ROTATE_90, WHITE);
 
   HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
+  Update_AdcReading();
   if (HAL_GPIO_ReadPin(GPIOB, low_Pin) == GPIO_PIN_SET){
+    Curr[0] = -2.7375f;
     high_efford();
   }
   else if (HAL_GPIO_ReadPin(GPIOD, mid_Pin) == GPIO_PIN_SET){
+    Curr[0] = -1.4f;
     mid_efford();
   }
   else if (HAL_GPIO_ReadPin(GPIOD, high_Pin) == GPIO_PIN_SET){
+    Curr[0] = -0.9125f;
     low_efford();
   }
   else if (HAL_GPIO_ReadPin(GPIOC, ex_Pin_Pin) == GPIO_PIN_SET){
+    Curr[0] = -3.65f;
     ex_high_efford();
+  }
+  else if (HAL_GPIO_ReadPin(GPIOD, ReadBatteryStatus_Pin) == GPIO_PIN_SET){
+    Curr[0]= - 0.01f;
+    HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 200);
   }
   else {
   }
+   
+  MX_X_CUBE_AI_Process();
+  HAL_Delay(3000);
 
-  
+  Update_BMS_UI(voltage, soc, soh);
+
+  sprintf(soc_str, "\r\nSOC: %d %%\r\n", soc);
+  HAL_UART_Transmit(&huart1, (uint8_t*)soc_str, strlen(soc_str), HAL_MAX_DELAY);
 
   /* USER CODE END 2 */
 
@@ -177,31 +198,46 @@ int main(void)
     
     HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);      // formula => Vout(x/4095)*3.21  
     if (HAL_GPIO_ReadPin(GPIOB, low_Pin) == GPIO_PIN_SET){
+      Curr[0] = -2.7375f;
       high_efford();
     }
     else if (HAL_GPIO_ReadPin(GPIOD, mid_Pin) == GPIO_PIN_SET){
+      Curr[0] = -1.4f;
       mid_efford();
     }
     else if (HAL_GPIO_ReadPin(GPIOD, high_Pin) == GPIO_PIN_SET){
+      Curr[0] = -0.9125f;
       low_efford();
     }
     else if (HAL_GPIO_ReadPin(GPIOC, ex_Pin_Pin) == GPIO_PIN_SET){
+      Curr[0] = -3.65f;
       ex_high_efford();
     }
-    else { 
+    else if (HAL_GPIO_ReadPin(GPIOD, ReadBatteryStatus_Pin) == GPIO_PIN_SET){
+    Curr[0]= -0.01f;
+    HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 200);
+    }
+    else {
     }
 
     if (epd_update_flag == 1 ){
           epd_update_flag = 0; 
           Update_BMS_UI(voltage, soc, soh); 
       }
- 
+    if(voltage < 2.75f) {
+    HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0);
+    while(1);
+   }
+    /* 調用 AI 推理流程 */
+    MX_X_CUBE_AI_Process();
+
+
  
     
     /* USER CODE END WHILE */
 
+  MX_X_CUBE_AI_Process();
     /* USER CODE BEGIN 3 */
-
   }
   /* USER CODE END 3 */
 }
@@ -537,11 +573,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BUSY_Pin low_Pin ONOFF_Pin */
-  GPIO_InitStruct.Pin = BUSY_Pin|low_Pin|ONOFF_Pin;
+  /*Configure GPIO pin : BUSY_Pin */
+  GPIO_InitStruct.Pin = BUSY_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(BUSY_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : RST_Pin DC_Pin CS_Pin */
   GPIO_InitStruct.Pin = RST_Pin|DC_Pin|CS_Pin;
@@ -550,16 +586,22 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : mid_Pin high_Pin */
-  GPIO_InitStruct.Pin = mid_Pin|high_Pin;
+  /*Configure GPIO pins : low_Pin ONOFF_Pin */
+  GPIO_InitStruct.Pin = low_Pin|ONOFF_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : mid_Pin high_Pin ReadBatteryStatus_Pin */
+  GPIO_InitStruct.Pin = mid_Pin|high_Pin|ReadBatteryStatus_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pin : ex_Pin_Pin */
   GPIO_InitStruct.Pin = ex_Pin_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(ex_Pin_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -603,7 +645,7 @@ void Update_BMS_UI(float voltage, float soc, float soh) {
 
     // SOH (State of Health)
     sprintf(text_buffer, "SOH  : %d.%d %%", soh10 / 10, soh10 % 10);
-    Paint_DrawString_EN(10, 100, text_buffer, &Font16, BLACK, WHITE);
+    // Paint_DrawString_EN(10, 100, text_buffer, &Font16, BLACK, WHITE);
 
     // --- 步驟 E：把畫好的畫布，透過 SPI 射給實體電子紙 ---
     EPD_Init();              // 1. 先喚醒硬體
@@ -623,8 +665,8 @@ static void Update_AdcReading(void)
   HAL_ADC_Start(&hadc1);
   HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
   adc_value = HAL_ADC_GetValue(&hadc1);
-  voltage1 = (adc_value / 4095.0f) * 3.22f * 2.0f ; 
-  voltage = ((voltage1 * CAL_SLOPE_M) + CAL_OFFSET_B)+0.05;
+  voltage = (adc_value / 4095.0f) * 3.22f * 2.07f + 0.05f;
+  // voltage = ((voltage1 * CAL_SLOPE_M) + CAL_OFFSET_B)+0.05;
 }
 
 void  low_efford (void)
@@ -632,28 +674,14 @@ void  low_efford (void)
       int A = 1024 ;
 
       HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, A);
-      if (voltage > 1.5){
-        soc = 50;
-        soh = 50;
-      }
-      else{
-        soc = 80;
-        soh = 80;
-      }
+
 }
 void mid_efford(void)
 {
       int B = 2047 ;
 
       HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, B);
-      if (voltage > 1.5){
-        soc = 50;
-        soh = 50;
-      }
-      else{
-        soc = 80;
-        soh = 80;
-      }
+
 }
 
 void high_efford(void)
@@ -661,14 +689,6 @@ void high_efford(void)
       int C = 3071 ;
       
       HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, C);
-      if (voltage > 1.5){
-        soc = 50;
-        soh = 50;
-      }
-      else{
-        soc = 80;
-        soh = 80;
-      }
 }
 
 void ex_high_efford(void)
@@ -676,14 +696,7 @@ void ex_high_efford(void)
       int D = 4095 ;
       
       HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, D);
-      if (voltage > 1.5){
-        soc = 50;
-        soh = 50;
-      }
-      else{
-        soc = 80;
-        soh = 80;
-      }
+
 }
 
 
