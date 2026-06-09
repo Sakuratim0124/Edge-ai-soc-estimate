@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    network.h
   * @author  AST Embedded Analytics Research Platform
-  * @date    2026-05-22T16:24:17+0800
+  * @date    2026-06-05T14:09:01+0800
   * @brief   AI Tool Automatic Code Generator for Embedded NN computing
   ******************************************************************************
   * @attention
@@ -23,7 +23,7 @@
 
 /******************************************************************************/
 #define AI_NETWORK_MODEL_NAME          "network"
-#define AI_NETWORK_ORIGIN_MODEL_NAME   "node_123456"
+#define AI_NETWORK_ORIGIN_MODEL_NAME   "use_this"
 
 /******************************************************************************/
 #define AI_NETWORK_ACTIVATIONS_ALIGNMENT   (4)
@@ -44,10 +44,10 @@ AI_DEPRECATED
   AI_NETWORK_IN_1_SIZE_BYTES, \
 }
 #define AI_NETWORK_IN_1_FORMAT      (AI_BUFFER_FORMAT_FLOAT)
-#define AI_NETWORK_IN_1_HEIGHT      (30)
+#define AI_NETWORK_IN_1_HEIGHT      (50)
 #define AI_NETWORK_IN_1_CHANNEL     (2)
-#define AI_NETWORK_IN_1_SIZE        (60)
-#define AI_NETWORK_IN_1_SIZE_BYTES  (240)
+#define AI_NETWORK_IN_1_SIZE        (100)
+#define AI_NETWORK_IN_1_SIZE_BYTES  (400)
 
 /******************************************************************************/
 #define AI_NETWORK_OUT_NUM       (1)

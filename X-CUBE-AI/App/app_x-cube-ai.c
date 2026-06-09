@@ -172,10 +172,10 @@ static int ai_run(void)
 
 // 標準化參數（從 JSON 取得）
 
-static const float x_mean[] = {3.8253064155578613f, -0.0525347925722599f};
-static const float x_std[] = {0.3397131860256195f, 2.6699869632720947f};
-static const float y_mean = 63.43370819091797f;
-static const float y_std = 31.977296829223633f;
+static const float x_mean[] = {3.597097635269165f, -1.4133143424987793f};
+static const float x_std[] = {0.2873367667198181f, 0.0047073024325072765f};
+static const float y_mean = 50.30403518676758f;
+static const float y_std = 28.806041717529297f;
 
 // 外部變數（在 main.c 定義）
 extern float voltage, Curr[20];
@@ -184,8 +184,8 @@ extern uint8_t epd_update_flag;
 extern char meassage[256];
 extern UART_HandleTypeDef huart1;
 
-// 資料緩衝（30 個時間步 × 2 通道）
-static float data_buf[30][2];
+// 資料緩衝（50 個時間步 × 2 通道）
+static float data_buf[50][2];
 static uint16_t data_count = 0;
 static uint16_t inference_counter = 0;
 
@@ -197,7 +197,7 @@ int acquire_and_process_data(ai_i8* data[])
   // (注意：此處假設 voltage 與 Curr[0] 已由 RTC 中斷或主迴圈更新)
   
   // 填充緩衝區
-  if (data_count < 30) {
+  if (data_count < 50) {
     data_buf[data_count][0] = voltage;    // 通道0: 電壓
     data_buf[data_count][1] = Curr[0];    // 通道1: 電流
     
@@ -212,15 +212,15 @@ int acquire_and_process_data(ai_i8* data[])
     sprintf(meassage, "[Step %2d] V=%d.%02dV, I=%d.%02dA, SOC=%d%%\r\n", data_count + 1, v_int, v_dec, i_int, i_dec, soc);
     HAL_UART_Transmit(&huart1, (uint8_t*)meassage, strlen(meassage), HAL_MAX_DELAY);
     data_count++;
-    inference_counter++;
+    inference_counter = data_count;
   }
   
-  // 當收集到 20 個樣本時，標準化並準備輸入
-  if (inference_counter >= 20) {
+  // 當收集到 50 個樣本時，標準化並準備輸入
+  if (data_count >= 50) {
     float* p_input = (float*)data[0];
     
-    // 標準化 30 個時間步
-    for (int i = 0; i < 30; i++) {
+    // 標準化 50 個時間步
+    for (int i = 0; i < 50; i++) {
       p_input[i*2 + 0] = (data_buf[i][0] - x_mean[0]) / x_std[0];  // V 歸一化
       p_input[i*2 + 1] = (data_buf[i][1] - x_mean[1]) / x_std[1];  // I 歸一化
     }
@@ -243,8 +243,8 @@ int post_process(ai_i8* data[])
   soc = (int)soc_float;
   
   // 範圍限制
-  if (soc < 0) soc = 0.01f;
-  if (soc > 100) soc =99.8f;
+  if (soc < 1) soc = 0.0f;
+  if (soc > 100) soc =100.0f;
   
   // SOH 簡化處理
   soh = soc;
@@ -265,12 +265,12 @@ int post_process(ai_i8* data[])
   HAL_UART_Transmit(&huart1, (uint8_t*)meassage, strlen(meassage), HAL_MAX_DELAY);
   
   // 滑動視窗：刪除前 20 個資料
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 30; i++) {
     data_buf[i][0] = data_buf[i + 20][0];
     data_buf[i][1] = data_buf[i + 20][1];
   }
-  data_count = 10;
-  inference_counter = 0;
+  data_count = 30;
+  inference_counter = data_count;
   
   return 0;
 }

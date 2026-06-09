@@ -7,9 +7,9 @@
 
         
         {
-            "type": "stlinkgdbtarget",
+            "type": "jlinkgdbtarget",
             "request": "launch",
-            "name": "STM32Cube: Launch STLink GDB Server",
+            "name": "STM32Cube: Launch JLink GDB Server",
             "origin": "snippet",
             "cwd": "${workspaceFolder}",
             "preBuild": "${command:st-stm32-ide-debug-launch.build}",

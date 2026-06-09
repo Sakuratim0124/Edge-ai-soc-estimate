@@ -149,12 +149,13 @@ int main(void)
 
   HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
   Update_AdcReading();
+  
   if (HAL_GPIO_ReadPin(GPIOB, low_Pin) == GPIO_PIN_SET){
     Curr[0] = -2.7375f;
     high_efford();
   }
   else if (HAL_GPIO_ReadPin(GPIOD, mid_Pin) == GPIO_PIN_SET){
-    Curr[0] = -1.4f;
+    Curr[0] = -1.42f;
     mid_efford();
   }
   else if (HAL_GPIO_ReadPin(GPIOD, high_Pin) == GPIO_PIN_SET){
@@ -202,7 +203,7 @@ int main(void)
       high_efford();
     }
     else if (HAL_GPIO_ReadPin(GPIOD, mid_Pin) == GPIO_PIN_SET){
-      Curr[0] = -1.4f;
+      Curr[0] = -1.42f;
       mid_efford();
     }
     else if (HAL_GPIO_ReadPin(GPIOD, high_Pin) == GPIO_PIN_SET){
@@ -224,7 +225,7 @@ int main(void)
           epd_update_flag = 0; 
           Update_BMS_UI(voltage, soc, soh); 
       }
-    if(voltage < 2.75f) {
+    if(voltage < 2.70f) {
     HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0);
     while(1);
    }
@@ -665,7 +666,7 @@ static void Update_AdcReading(void)
   HAL_ADC_Start(&hadc1);
   HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
   adc_value = HAL_ADC_GetValue(&hadc1);
-  voltage = (adc_value / 4095.0f) * 3.22f * 2.07f + 0.05f;
+  voltage = (adc_value / 4095.0f) * 3.22f * 2.07f ;
   // voltage = ((voltage1 * CAL_SLOPE_M) + CAL_OFFSET_B)+0.05;
 }
 
